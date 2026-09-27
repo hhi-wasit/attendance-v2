@@ -10528,7 +10528,7 @@ async function unzipXlsx(file){
   var a=new Uint8Array(await file.arrayBuffer()),end=-1;
   for(var i=a.length-22;i>=0&&i>a.length-65558;i--)if(u32(a,i)===0x06054b50){end=i;break;}
   if(end<0)throw Error('ملف Excel غير صالح');
-  var count=u16(a,end+10),cd=u32(a,end+16),pos=u32(a,end+20),out={};
+  var count=u16(a,end+10),cd=u32(a,end+12),pos=u32(a,end+16),out={};
   for(var n=0;n<count;n++){
     if(u32(a,pos)!==0x02014b50)break;
     var method=u16(a,pos+10),cs=u32(a,pos+20),nl=u16(a,pos+28),el=u16(a,pos+30),cl=u16(a,pos+32),off=u32(a,pos+42);
@@ -10556,7 +10556,7 @@ function norm(s){return String(s==null?'':s).normalize('NFKC').replace(/[\u064B-
 function headerType(s){var n=norm(s);if(n==='ت'||n==='الرقم'||n==='رقم'||n==='id'||n==='no'||n.includes('number'))return'no';if(n.includes('اسم')||n==='name')return'name';if(n.includes('قسم')||n.includes('department')||n==='dept')return'dept';if(n.includes('مرحله')||n.includes('مرحلة')||n.includes('stage')||n.includes('level')||n.includes('year'))return'stage';if(n.includes('مجموع')||n.includes('group')||n.includes('شعبه')||n.includes('شعبة'))return'group';return null;}
 async function importRoster(file){
   var rows=await readXlsx(file);if(rows.length<2)throw Error('ملف Excel فارغ');
-  var heads=rows[0]||[],map={};heads.forEach(function(h,i){var k=headerType(h);if(k&&!map[k])map[k]=i;});
+  var heads=rows[0]||[],map={};heads.forEach(function(h,i){var k=headerType(h);if(k&&map[k]===undefined)map[k]=i;});
   if(map.name==null)throw Error('لم أجد عمود اسم الطالب');
   var roster=[];rows.slice(1).forEach(function(row){var name=clean(row[map.name]);if(!name)return;var det=[];[['dept','القسم'],['stage','المرحلة'],['group','المجموعة']].forEach(function(x){var v=clean(row[map[x[0]]]);if(v)det.push({label:x[1],value:v});});roster.push({id:uid(),no:clean(map.no==null?'':row[map.no])||null,name:name,details:det});});
   if(!roster.length)throw Error('لم توجد أسماء طلاب في الملف');return roster;
@@ -10726,7 +10726,7 @@ var CLASS_LISTS={
   'nursing-c':{label:'التمريض كروب C',file:'nursing C.xlsx'},
   'nursing-d':{label:'التمريض كروب D',file:'nursing D.xlsx'}
 };
-function classFileUrl(file){return new URL('attendance lists/'+file,location.href).href;}
+function classFileUrl(file){return new URL('./attendance%20lists/'+encodeURIComponent(file),location.href).href;}
 async function loadClass(key){
   var c=CLASS_LISTS[key];if(!c)return;
   els.classButtons.querySelectorAll('.class-button').forEach(function(b){b.disabled=true;});
