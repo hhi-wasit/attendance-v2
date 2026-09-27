@@ -93,8 +93,16 @@ header{display:flex;align-items:flex-start;gap:10px;margin-bottom:12px}
 .actions .primary{flex:1;min-width:150px}
 .roster-info{color:var(--muted);font-size:14px;margin:-4px 0 10px;line-height:1.35}
 .row.absent{opacity:.72}
-.row .state{font-size:13px;font-weight:700;color:var(--accent);padding-top:2px}
-.row.absent .state{color:var(--warn)}
+.row .state{font-size:13px;font-weight:800;color:var(--danger);padding-top:2px}
+.row.absent .state{color:var(--danger)}
+
+/* class selector */
+.classes{margin:10px 0 14px}
+.classes h2{font-size:16px;color:var(--ink);margin:0 0 8px}
+.class-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.class-button{background:var(--panel);border:1.5px solid var(--line);border-radius:10px;padding:10px 8px;color:var(--ink);font-weight:700;min-height:44px}
+.class-button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--paper)}
+.class-button:disabled{opacity:.55;cursor:wait}
 
 /* last result */
 .result{
@@ -185,6 +193,18 @@ dialog::backdrop{background:rgba(6,10,24,.55)}
     <button id="btnSessions" class="ghost" type="button">الجلسات</button>
   </header>
 
+  <section class="classes" aria-labelledby="classHeading">
+    <h2 id="classHeading">اختر المجموعة</h2>
+    <div id="classButtons" class="class-buttons">
+      <button class="class-button" type="button" data-class="emergency" aria-pressed="false">الطوارئ</button>
+      <button class="class-button" type="button" data-class="midwifery" aria-pressed="false">القبالة</button>
+      <button class="class-button" type="button" data-class="nursing-a" aria-pressed="false">التمريض كروب A</button>
+      <button class="class-button" type="button" data-class="nursing-b" aria-pressed="false">التمريض كروب B</button>
+      <button class="class-button" type="button" data-class="nursing-c" aria-pressed="false">التمريض كروب C</button>
+      <button class="class-button" type="button" data-class="nursing-d" aria-pressed="false">التمريض كروب D</button>
+    </div>
+  </section>
+
   <section id="scanner" class="scanner off" aria-label="Camera view">
     <video id="video" playsinline muted></video>
     <div class="frame" aria-hidden="true"><i></i><i></i><i></i><i></i><span class="line"></span></div>
@@ -194,9 +214,7 @@ dialog::backdrop{background:rgba(6,10,24,.55)}
   <div class="actions">
     <button id="btnScan" class="primary" type="button">بدء المسح</button>
     <button id="btnPhoto" class="ghost" type="button">مسح من صورة</button>
-    <button id="btnRoster" class="ghost" type="button">تحميل قائمة Excel</button>
     <input id="photoInput" type="file" accept="image/*" hidden>
-    <input id="rosterInput" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
   </div>
   <div id="rosterInfo" class="roster-info" hidden></div>
 
@@ -10488,12 +10506,12 @@ var fmtTime=function(ts){var d=new Date(ts);return pad(d.getHours())+':'+pad(d.g
 var isoDate=function(ts){var d=new Date(ts);return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());};
 
 /* ---------- storage ---------- */
-function newSession(){var now=Date.now();return{id:uid(),title:'محاضرة',createdAt:now,records:[],roster:[],finalized:false};}
+function newSession(){var now=Date.now();return{id:uid(),title:'محاضرة',createdAt:now,records:[],roster:[],finalized:false,classKey:null,classLabel:''};}
 var state=(function(){
   try{var s=JSON.parse(localStorage.getItem(STORE));if(s&&Array.isArray(s.sessions)&&s.sessions.length)return s;}catch(e){}
   var first=newSession();return{sessions:[first],currentId:first.id};
 })();
-state.sessions.forEach(function(s){if(!Array.isArray(s.roster))s.roster=[];if(typeof s.finalized!=='boolean')s.finalized=false;});
+state.sessions.forEach(function(s){if(!Array.isArray(s.roster))s.roster=[];if(typeof s.finalized!=='boolean')s.finalized=false;if(!s.classKey)s.classKey=null;if(!s.classLabel)s.classLabel='';});
 var storageWarned=false;
 function save(){
   try{localStorage.setItem(STORE,JSON.stringify(state));}
@@ -10631,7 +10649,7 @@ function finalizeAttendance(){
 }
 
 /* ---------- elements ---------- */
-var els={};['title','dateLabel','scanner','video','idle','idleMsg','btnScan','btnPhoto','photoInput','btnRoster','rosterInput','rosterInfo','result','rStatus','rName','rDetail',
+var els={};['title','dateLabel','classButtons','scanner','video','idle','idleMsg','btnScan','btnPhoto','photoInput','rosterInfo','result','rStatus','rName','rDetail',
  'count','countLabel','btnAdd','list','empty','note','sortAz','segShare','segSave','btnWord','btnPdf','entryDlg','entryTitle','fName','fDept','fGroup',
  'entryDel','entryCancel','entrySave','sessDlg','sessList','sessClose','sessNew','btnSessions','btnInstall'].forEach(function(id){els[id]=document.getElementById(id);});
 
@@ -10649,7 +10667,8 @@ function render(){
   els.count.textContent=present;
   els.countLabel.textContent=s.roster.length?(s.finalized?'حاضر من أصل '+total+' طالب':'طالب حاضر من القائمة'): 'طالب حاضر في هذه المحاضرة';
   els.rosterInfo.hidden=!s.roster.length;
-  if(s.roster.length)els.rosterInfo.textContent='قائمة Excel: '+s.roster.length+' طالب'+(s.finalized?' — تم تثبيت الحضور والغياب':' — سيتم تثبيت الغياب عند إيقاف المسح');
+  if(s.roster.length)els.rosterInfo.textContent='قائمة '+(s.classLabel||'Excel')+': '+s.roster.length+' طالب'+(s.finalized?' — تم تثبيت الحضور والغياب':' — سيتم تثبيت الغياب عند إيقاف المسح');
+  els.classButtons.querySelectorAll('.class-button').forEach(function(b){b.setAttribute('aria-pressed',String(b.dataset.class===s.classKey));});
   els.list.replaceChildren();
   finalRows.forEach(function(r,i){
     var li=document.createElement('li'),b=document.createElement('button');b.type='button';b.className='row'+(r.status==='غائب'?' absent':'');
@@ -10695,6 +10714,35 @@ function showResult(r){
   rec.details.forEach(function(dd){els.rDetail.appendChild(span('',dd.value));});
   if(r.status==='new'){flash('ok');beep(880,.12);buzz(60);}else{flash('warn');beep(330,.2);buzz([80,60,80]);}
 }
+
+/* ---------- repository class rosters ----------
+   These files are served from the repository's "attendance lists" folder.
+   Upload the six .xlsx files there using the exact names below. */
+var CLASS_LISTS={
+  emergency:{label:'الطوارئ',file:'emergency.xlsx'},
+  midwifery:{label:'القبالة',file:'midwifery.xlsx'},
+  'nursing-a':{label:'التمريض كروب A',file:'nursing A.xlsx'},
+  'nursing-b':{label:'التمريض كروب B',file:'nursing B.xlsx'},
+  'nursing-c':{label:'التمريض كروب C',file:'nursing C.xlsx'},
+  'nursing-d':{label:'التمريض كروب D',file:'nursing D.xlsx'}
+};
+function classFileUrl(file){return new URL('attendance lists/'+file,location.href).href;}
+async function loadClass(key){
+  var c=CLASS_LISTS[key];if(!c)return;
+  els.classButtons.querySelectorAll('.class-button').forEach(function(b){b.disabled=true;});
+  note('جارٍ تحميل قائمة '+c.label+'…',6000);
+  try{
+    var res=await fetch(classFileUrl(c.file),{cache:'no-store'});
+    if(!res.ok)throw Error('لم يتم العثور على ملف '+c.file+' داخل مجلد attendance lists');
+    var blob=await res.blob();blob.name=c.file;
+    var rows=await importRoster(blob),s=newSession();
+    s.title=c.label;s.classKey=key;s.classLabel=c.label;s.roster=rows;
+    state.sessions.push(s);state.currentId=s.id;save();render();els.result.hidden=true;lastRaw='';
+    note('تم تحميل قائمة '+c.label+' — '+rows.length+' طالب.',3600);
+  }catch(e){note(e&&e.message?e.message:'تعذّر تحميل قائمة هذه المجموعة.',5200);}
+  els.classButtons.querySelectorAll('.class-button').forEach(function(b){b.disabled=false;});
+}
+els.classButtons.querySelectorAll('.class-button').forEach(function(b){b.addEventListener('click',function(){loadClass(b.dataset.class);});});
 
 /* ---------- scanner ---------- */
 var stream=null,scanning=false,detector=null,busy=false,lastTick=0,lastRaw='',lastAt=0,wake=null;
@@ -10770,9 +10818,6 @@ async function tick(ts){
 els.btnScan.addEventListener('click',function(){if(scanning)stopScan();else startScan();});
 document.addEventListener('visibilitychange',function(){if(document.hidden&&scanning)stopScan();});
 
-els.btnRoster.addEventListener('click',function(){els.rosterInput.click();});
-els.rosterInput.addEventListener('change',async function(e){var f=e.target.files[0];e.target.value='';if(!f)return;try{var s=cur(),rows=await importRoster(f);s.roster=rows;s.records=[];s.finalized=false;if(s.title==='محاضرة')s.title=f.name.replace(/\.xlsx$/i,'');save();render();note('تم تحميل '+rows.length+' طالب من ملف Excel.',3600);}catch(x){note(x&&x.message?x.message:'تعذّر قراءة ملف Excel.',5200);}});
-
 els.btnPhoto.addEventListener('click',function(){els.photoInput.click();});
 els.photoInput.addEventListener('change',async function(e){
   var f=e.target.files[0];e.target.value='';if(!f)return;
@@ -10840,7 +10885,7 @@ function renderSessions(){
   state.sessions.slice().sort(function(a,b){return b.createdAt-a.createdAt;}).forEach(function(s){
     var li=document.createElement('li'),open=document.createElement('button');
     open.type='button';open.className='open'+(s.id===state.currentId?' current':'');
-    var b=document.createElement('b');b.textContent=s.title;b.dir='auto';
+    var b=document.createElement('b');b.textContent=s.classLabel||s.title;b.dir='auto';
     var sm=document.createElement('small');sm.textContent=fmtDate(s.createdAt)+'، '+s.records.length+' حاضر';
     open.appendChild(b);open.appendChild(sm);
     open.addEventListener('click',function(){state.currentId=s.id;save();render();els.sessDlg.close();});
