@@ -10424,10 +10424,10 @@ function wRun(text,o){o=o||{};var sz=o.sz||22;
     (HAS_RTL.test(text)?'<w:rtl/>':'')+'</w:rPr><w:t xml:space="preserve">'+xmlEsc(text)+'</w:t></w:r>';}
 function wPara(inner,o){o=o||{};
   return '<w:p><w:pPr><w:spacing w:before="'+(o.before||0)+'" w:after="'+(o.after==null?120:o.after)+'"/>'+
-    (o.jc?'<w:jc w:val="'+o.jc+'"/>':'')+'</w:pPr>'+inner+'</w:p>';}
+    (o.jc?'<w:jc w:val="'+o.jc+'"/>':'')+(o.bidi?'<w:bidi/>':'')+'</w:pPr>'+inner+'</w:p>';}
 function wCell(text,w,o){o=o||{};
   return '<w:tc><w:tcPr><w:tcW w:w="'+w+'" w:type="dxa"/>'+(o.fill?'<w:shd w:val="clear" w:color="auto" w:fill="'+o.fill+'"/>':'')+
-    '</w:tcPr>'+wPara(wRun(text,{b:o.b,sz:21,color:o.color}),{after:0})+'</w:tc>';}
+    '</w:tcPr>'+wPara(wRun(text,{b:o.b,sz:21,color:o.color}),{after:0,jc:'right',bidi:true})+'</w:tc>';}
 
 var DOCX_COLS=[['ت',500],['الاسم',2500],['التفاصيل',2600],['التاريخ',1500],['الوقت',1100],['الحالة',1438]];
 function buildDocxBlob(meta,rows){
@@ -10442,7 +10442,7 @@ function buildDocxBlob(meta,rows){
   rows.forEach(function(r,i){
     var v=[String(i+1),r.name,r.details,r.date,r.time,r.status||'حاضر'];
     tbl+='<w:tr><w:trPr><w:cantSplit/></w:trPr>';
-    v.forEach(function(t,j){tbl+=wCell(t,DOCX_COLS[j][1],{fill:(i%2?'F3F5F9':null)});});
+    v.forEach(function(t,j){tbl+=wCell(t,DOCX_COLS[j][1],{fill:(i%2?'F3F5F9':null),color:(j===5&&t==='غائب'?'B3261E':null)});});
     tbl+='</w:tr>';
   });
   tbl+='</w:tbl>';
@@ -10453,7 +10453,7 @@ function buildDocxBlob(meta,rows){
     wPara(wRun('تاريخ التصدير: '+meta.exported,{sz:18,color:'7A8499'}),{before:200,after:0,jc:'right'});
   var doc='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
     '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'+body+
-    '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="708" w:footer="708" w:gutter="0"/></w:sectPr></w:body></w:document>';
+    '<w:sectPr><w:bidi/><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="708" w:footer="708" w:gutter="0"/></w:sectPr></w:body></w:document>';
   var types='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'+
     '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>'+
     '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>';
@@ -10908,8 +10908,7 @@ els.sessNew.addEventListener('click',function(){
 });
 
 /* ---------- export ---------- */
-var shareOK=false,mode='share';
-try{shareOK=!!(navigator.canShare&&navigator.canShare({files:[new File(['x'],'x.txt',{type:'text/plain'})]}));}catch(e){}
+var shareOK=!!navigator.share,mode='share';
 function setMode(m){
   mode=(m==='share'&&shareOK)?'share':'save';
   els.segShare.setAttribute('aria-pressed',String(mode==='share'));
@@ -10934,7 +10933,8 @@ async function deliver(blob,filename){
   if(mode==='share'){
     try{
       var file=new File([blob],filename,{type:blob.type});
-      if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:filename});return;}
+      var canFileShare=!navigator.canShare||navigator.canShare({files:[file]});
+      if(navigator.share&&canFileShare){await navigator.share({files:[file],title:filename,text:'سجل الحضور'});return;}
     }catch(e){if(e&&e.name==='AbortError')return;}
   }
   var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;
