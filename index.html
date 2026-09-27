@@ -89,8 +89,12 @@ header{display:flex;align-items:flex-start;gap:10px;margin-bottom:12px}
 }
 .scanner.on .idle{display:none}
 
-.actions{display:flex;gap:10px;margin:12px 0}
-.actions .primary{flex:1}
+.actions{display:flex;gap:10px;margin:12px 0;flex-wrap:wrap}
+.actions .primary{flex:1;min-width:150px}
+.roster-info{color:var(--muted);font-size:14px;margin:-4px 0 10px;line-height:1.35}
+.row.absent{opacity:.72}
+.row .state{font-size:13px;font-weight:700;color:var(--accent);padding-top:2px}
+.row.absent .state{color:var(--warn)}
 
 /* last result */
 .result{
@@ -190,8 +194,11 @@ dialog::backdrop{background:rgba(6,10,24,.55)}
   <div class="actions">
     <button id="btnScan" class="primary" type="button">بدء المسح</button>
     <button id="btnPhoto" class="ghost" type="button">مسح من صورة</button>
+    <button id="btnRoster" class="ghost" type="button">تحميل قائمة Excel</button>
     <input id="photoInput" type="file" accept="image/*" hidden>
+    <input id="rosterInput" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
   </div>
+  <div id="rosterInfo" class="roster-info" hidden></div>
 
   <section id="result" class="result" aria-live="polite" hidden>
     <div id="rStatus" class="rstatus"></div>
@@ -201,7 +208,7 @@ dialog::backdrop{background:rgba(6,10,24,.55)}
 
   <section class="tally">
     <div id="count" class="count" aria-live="polite">0</div>
-    <div class="countlabel">طالب حاضر في هذه المحاضرة</div>
+    <div id="countLabel" class="countlabel">طالب حاضر في هذه المحاضرة</div>
     <button id="btnAdd" class="ghost" type="button">إضافة بالاسم</button>
   </section>
 
@@ -10404,7 +10411,7 @@ function wCell(text,w,o){o=o||{};
   return '<w:tc><w:tcPr><w:tcW w:w="'+w+'" w:type="dxa"/>'+(o.fill?'<w:shd w:val="clear" w:color="auto" w:fill="'+o.fill+'"/>':'')+
     '</w:tcPr>'+wPara(wRun(text,{b:o.b,sz:21,color:o.color}),{after:0})+'</w:tc>';}
 
-var DOCX_COLS=[['ت',600],['الاسم',2800],['التفاصيل',3200],['التاريخ',1700],['الوقت',1338]];
+var DOCX_COLS=[['ت',500],['الاسم',2500],['التفاصيل',2600],['التاريخ',1500],['الوقت',1100],['الحالة',1438]];
 function buildDocxBlob(meta,rows){
   var bd='';['top','left','bottom','right','insideH','insideV'].forEach(function(s){
     bd+='<w:'+s+' w:val="single" w:sz="4" w:space="0" w:color="BFC7D5"/>';});
@@ -10415,7 +10422,7 @@ function buildDocxBlob(meta,rows){
   DOCX_COLS.forEach(function(c){tbl+=wCell(c[0],c[1],{b:true,fill:'1C2B4F',color:'FFFFFF'});});
   tbl+='</w:tr>';
   rows.forEach(function(r,i){
-    var v=[String(i+1),r.name,r.details,r.date,r.time];
+    var v=[String(i+1),r.name,r.details,r.date,r.time,r.status||'حاضر'];
     tbl+='<w:tr><w:trPr><w:cantSplit/></w:trPr>';
     v.forEach(function(t,j){tbl+=wCell(t,DOCX_COLS[j][1],{fill:(i%2?'F3F5F9':null)});});
     tbl+='</w:tr>';
@@ -10423,7 +10430,7 @@ function buildDocxBlob(meta,rows){
   tbl+='</w:tbl>';
   var body=wPara(wRun(meta.title,{b:true,sz:36,color:'1C2B4F'}),{after:60,jc:'right'})+
     wPara(wRun('التاريخ: '+meta.dateLabel,{sz:22,color:'4A556B'}),{after:40,jc:'right'})+
-    wPara(wRun('عدد الطلبة الحاضرين: '+rows.length,{sz:22,color:'4A556B'}),{after:200,jc:'right'})+
+    wPara(wRun('عدد الطلبة الحاضرين: '+meta.presentCount,{sz:22,color:'4A556B'}),{after:200,jc:'right'})+
     tbl+
     wPara(wRun('تاريخ التصدير: '+meta.exported,{sz:18,color:'7A8499'}),{before:200,after:0,jc:'right'});
   var doc='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
@@ -10481,17 +10488,61 @@ var fmtTime=function(ts){var d=new Date(ts);return pad(d.getHours())+':'+pad(d.g
 var isoDate=function(ts){var d=new Date(ts);return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());};
 
 /* ---------- storage ---------- */
-function newSession(){var now=Date.now();return{id:uid(),title:'محاضرة',createdAt:now,records:[]};}
+function newSession(){var now=Date.now();return{id:uid(),title:'محاضرة',createdAt:now,records:[],roster:[],finalized:false};}
 var state=(function(){
   try{var s=JSON.parse(localStorage.getItem(STORE));if(s&&Array.isArray(s.sessions)&&s.sessions.length)return s;}catch(e){}
   var first=newSession();return{sessions:[first],currentId:first.id};
 })();
+state.sessions.forEach(function(s){if(!Array.isArray(s.roster))s.roster=[];if(typeof s.finalized!=='boolean')s.finalized=false;});
 var storageWarned=false;
 function save(){
   try{localStorage.setItem(STORE,JSON.stringify(state));}
   catch(e){if(!storageWarned){storageWarned=true;note('هذا المتصفح لا يحفظ البيانات. صدّر القائمة قبل إغلاق التطبيق.',6000);}}
 }
 function cur(){return state.sessions.filter(function(s){return s.id===state.currentId;})[0]||state.sessions[0];}
+
+/* ---------- Excel roster import (offline .xlsx reader) ----------
+   The reader handles ordinary Excel workbooks without a network library: it
+   reads the first worksheet from the XLSX zip and maps Arabic/English headers. */
+function u16(a,o){return a[o]|(a[o+1]<<8)}
+function u32(a,o){return (a[o]|(a[o+1]<<8)|(a[o+2]<<16)|(a[o+3]<<24))>>>0}
+async function unzipXlsx(file){
+  var a=new Uint8Array(await file.arrayBuffer()),end=-1;
+  for(var i=a.length-22;i>=0&&i>a.length-65558;i--)if(u32(a,i)===0x06054b50){end=i;break;}
+  if(end<0)throw Error('ملف Excel غير صالح');
+  var count=u16(a,end+10),cd=u32(a,end+16),pos=u32(a,end+20),out={};
+  for(var n=0;n<count;n++){
+    if(u32(a,pos)!==0x02014b50)break;
+    var method=u16(a,pos+10),cs=u32(a,pos+20),nl=u16(a,pos+28),el=u16(a,pos+30),cl=u16(a,pos+32),off=u32(a,pos+42);
+    var name=new TextDecoder().decode(a.slice(pos+46,pos+46+nl));
+    var lp=off,ln=u16(a,lp+26),le=u16(a,lp+28),raw=a.slice(lp+30+ln+le,lp+30+ln+le+cs),data;
+    if(method===0)data=raw;
+    else if(method===8){if(typeof DecompressionStream==='undefined')throw Error('هذا المتصفح لا يدعم قراءة Excel بدون اتصال');data=new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer());}
+    else throw Error('نوع ضغط Excel غير مدعوم');
+    out[name]=data;pos+=46+nl+el+cl;
+  }
+  return out;
+}
+function xmlText(el){return el?el.textContent:''}
+function excelCol(ref){var m=String(ref||'').match(/^([A-Z]+)/i),n=0;if(!m)return 0;for(var i=0;i<m[1].length;i++)n=n*26+m[1].toUpperCase().charCodeAt(i)-64;return n-1}
+async function readXlsx(file){
+  var z=await unzipXlsx(file),dec=new TextDecoder(),shared=[];
+  if(z['xl/sharedStrings.xml']){var sd=new DOMParser().parseFromString(dec.decode(z['xl/sharedStrings.xml']),'application/xml');sd.querySelectorAll('si').forEach(function(si){shared.push(Array.from(si.querySelectorAll('t')).map(xmlText).join(''));});}
+  var sheetName=Object.keys(z).filter(function(k){return /^xl\/worksheets\/sheet\d+\.xml$/.test(k);})[0];
+  if(!sheetName)throw Error('لم توجد ورقة عمل في الملف');
+  var doc=new DOMParser().parseFromString(dec.decode(z[sheetName]),'application/xml'),rows=[];
+  doc.querySelectorAll('sheetData row').forEach(function(row){var cells=[];row.querySelectorAll(':scope > c').forEach(function(c){var ref=c.getAttribute('r'),v=c.querySelector('v'),is=c.querySelector('is'),val=v?xmlText(v):(is?Array.from(is.querySelectorAll('t')).map(xmlText).join(''):'');if(c.getAttribute('t')==='s')val=shared[Number(val)]||'';cells[excelCol(ref)]=val;});rows.push(cells);});
+  return rows;
+}
+function norm(s){return String(s==null?'':s).normalize('NFKC').replace(/[\u064B-\u065F\u0670]/g,'').replace(/[إأآٱ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه').replace(/ـ/g,'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,'');}
+function headerType(s){var n=norm(s);if(n==='ت'||n==='الرقم'||n==='رقم'||n==='id'||n==='no'||n.includes('number'))return'no';if(n.includes('اسم')||n==='name')return'name';if(n.includes('قسم')||n.includes('department')||n==='dept')return'dept';if(n.includes('مرحله')||n.includes('مرحلة')||n.includes('stage')||n.includes('level')||n.includes('year'))return'stage';if(n.includes('مجموع')||n.includes('group')||n.includes('شعبه')||n.includes('شعبة'))return'group';return null;}
+async function importRoster(file){
+  var rows=await readXlsx(file);if(rows.length<2)throw Error('ملف Excel فارغ');
+  var heads=rows[0]||[],map={};heads.forEach(function(h,i){var k=headerType(h);if(k&&!map[k])map[k]=i;});
+  if(map.name==null)throw Error('لم أجد عمود اسم الطالب');
+  var roster=[];rows.slice(1).forEach(function(row){var name=clean(row[map.name]);if(!name)return;var det=[];[['dept','القسم'],['stage','المرحلة'],['group','المجموعة']].forEach(function(x){var v=clean(row[map[x[0]]]);if(v)det.push({label:x[1],value:v});});roster.push({id:uid(),no:clean(map.no==null?'':row[map.no])||null,name:name,details:det});});
+  if(!roster.length)throw Error('لم توجد أسماء طلاب في الملف');return roster;
+}
 
 /* ---------- QR text -> student ----------
    Supports several code layouts so the app keeps working if the school's QR
@@ -10541,6 +10592,7 @@ function parseCode(raw){
   });
   if(labeled)return{no:map.no||null,name:clean(map.name),details:detailsFromMap(map).concat(extra)};
   var plain=lines.map(clean).filter(Boolean);
+  if(plain.length===1&&/^[\d٠-٩]+$/.test(plain[0]))return{no:plain[0],name:'',details:[]};
   var det=[];
   if(plain[1])det.push({label:LABEL_AR.dept,value:plain[1]});
   if(plain[2])det.push({label:LABEL_AR.group,value:plain.slice(2).join(' ')});
@@ -10552,19 +10604,35 @@ function keyOf(r){
   return(r.name+'|'+r.details.map(function(d){return d.value;}).join('|')).toLowerCase();
 }
 
+function findRoster(p,raw){
+  var s=cur(),rn=norm(raw),pn=norm(p.no),nn=norm(p.name);
+  return s.roster.filter(function(r){return(pn&&norm(r.no)===pn)||(nn&&norm(r.name)===nn)||(rn&&norm(r.no)===rn)||(rn&&norm(r.name)===rn);})[0]||null;
+}
 function record(raw){
-  var p=parseCode(raw);
+  var p=parseCode(raw),s=cur(),match=s.roster.length?findRoster(p,raw):null;
+  if(s.roster.length){
+    if(!match)return{status:'unknown',raw:String(raw)};
+    var ex=s.records.filter(function(r){return r.rosterId===match.id;})[0];
+    if(ex)return{status:'dup',rec:ex};
+    var rec={id:uid(),rosterId:match.id,no:match.no,name:match.name,details:match.details,ts:Date.now(),status:'حاضر'};
+    s.records.push(rec);s.finalized=false;save();render();return{status:'new',rec:rec};
+  }
   if(looksInvalid(p,raw))return{status:'invalid',raw:String(raw)};
-  var s=cur(),k=keyOf(p),ex=s.records.filter(function(r){return keyOf(r)===k;})[0];
+  var k=keyOf(p),ex=s.records.filter(function(r){return keyOf(r)===k;})[0];
   if(ex)return{status:'dup',rec:ex};
-  var rec={id:uid(),no:p.no,name:p.name,details:p.details,ts:Date.now()};
-  s.records.push(rec);save();render();
-  return{status:'new',rec:rec};
+  var rec={id:uid(),no:p.no,name:p.name,details:p.details,ts:Date.now(),status:'حاضر'};
+  s.records.push(rec);save();render();return{status:'new',rec:rec};
+}
+function finalizeAttendance(){
+  var s=cur();if(!s.roster.length)return;
+  s.finalized=true;s.finalizedAt=Date.now();save();render();
+  var present=s.records.length,absent=Math.max(0,s.roster.length-present);
+  note('اكتمل التسجيل: '+present+' حاضر، '+absent+' غائب.',4200);
 }
 
 /* ---------- elements ---------- */
-var els={};['title','dateLabel','scanner','video','idle','idleMsg','btnScan','btnPhoto','photoInput','result','rStatus','rName','rDetail',
- 'count','btnAdd','list','empty','note','sortAz','segShare','segSave','btnWord','btnPdf','entryDlg','entryTitle','fName','fDept','fGroup',
+var els={};['title','dateLabel','scanner','video','idle','idleMsg','btnScan','btnPhoto','photoInput','btnRoster','rosterInput','rosterInfo','result','rStatus','rName','rDetail',
+ 'count','countLabel','btnAdd','list','empty','note','sortAz','segShare','segSave','btnWord','btnPdf','entryDlg','entryTitle','fName','fDept','fGroup',
  'entryDel','entryCancel','entrySave','sessDlg','sessList','sessClose','sessNew','btnSessions','btnInstall'].forEach(function(id){els[id]=document.getElementById(id);});
 
 var noteTimer=null;
@@ -10574,23 +10642,28 @@ function span(cls,text){var e=document.createElement('span');if(cls)e.className=
 
 /* ---------- render ---------- */
 function render(){
-  var s=cur();
+  var s=cur(),finalRows=s.roster.length&&s.finalized?s.roster.map(function(r){var p=s.records.filter(function(x){return x.rosterId===r.id;})[0];return Object.assign({},r,{status:p?'حاضر':'غائب',ts:p?p.ts:null});}):s.records.slice().reverse();
   if(document.activeElement!==els.title)els.title.value=s.title;
   els.dateLabel.textContent=fmtLong(s.createdAt);
-  els.count.textContent=s.records.length;
+  var present=s.records.length,total=s.roster.length&&s.finalized?s.roster.length:present;
+  els.count.textContent=present;
+  els.countLabel.textContent=s.roster.length?(s.finalized?'حاضر من أصل '+total+' طالب':'طالب حاضر من القائمة'): 'طالب حاضر في هذه المحاضرة';
+  els.rosterInfo.hidden=!s.roster.length;
+  if(s.roster.length)els.rosterInfo.textContent='قائمة Excel: '+s.roster.length+' طالب'+(s.finalized?' — تم تثبيت الحضور والغياب':' — سيتم تثبيت الغياب عند إيقاف المسح');
   els.list.replaceChildren();
-  for(var i=s.records.length-1;i>=0;i--){
-    var r=s.records[i],li=document.createElement('li'),b=document.createElement('button');
-    b.type='button';b.className='row';b.dataset.id=r.id;
+  finalRows.forEach(function(r,i){
+    var li=document.createElement('li'),b=document.createElement('button');b.type='button';b.className='row'+(r.status==='غائب'?' absent':'');
+    if(!s.finalized)b.dataset.id=r.id;if(s.finalized)b.disabled=true;
     var mid=document.createElement('div'),nm=span('nm',r.name);nm.dir='auto';mid.appendChild(nm);
     var meta=document.createElement('div');meta.className='meta';
     r.details.forEach(function(dd){var e=span('',dd.value);e.dir='auto';meta.appendChild(e);});
     if(meta.childNodes.length)mid.appendChild(meta);
-    b.appendChild(span('n',String(i+1)));b.appendChild(mid);b.appendChild(span('tm',fmtTime(r.ts)));
+    b.appendChild(span('n',String(i+1)));b.appendChild(mid);b.appendChild(span('state',r.status||'حاضر'));b.appendChild(span('tm',r.ts?fmtTime(r.ts):'—'));
     li.appendChild(b);els.list.appendChild(li);
-  }
-  els.empty.hidden=s.records.length>0;
-  els.btnWord.disabled=els.btnPdf.disabled=!s.records.length;
+  });
+  els.empty.hidden=finalRows.length>0;
+  els.empty.textContent=s.roster.length&&s.finalized?'لا توجد بيانات للحضور.':'لم يُسجَّل أحد بعد. كل مسح يضيف اسم الطالب وتفاصيله والتاريخ والوقت هنا.';
+  els.btnWord.disabled=els.btnPdf.disabled=!finalRows.length;
 }
 
 /* ---------- feedback ---------- */
@@ -10610,6 +10683,7 @@ function showResult(r){
   els.result.hidden=false;els.rDetail.replaceChildren();
   var warn=r.status!=='new';
   els.result.classList.toggle('warn',warn);
+  if(r.status==='unknown'){els.rStatus.textContent='الطالب غير موجود في قائمة Excel';els.rName.textContent=r.raw.slice(0,70)+(r.raw.length>70?'…':'');flash('warn');beep(300,.25);buzz([80,60,80]);return;}
   if(r.status==='invalid'){
     els.rStatus.textContent='هذا ليس رمز طالب، لم يتم التسجيل';
     els.rName.textContent=r.raw.slice(0,70)+(r.raw.length>70?'…':'');
@@ -10643,6 +10717,7 @@ function handleScan(text,force){
 }
 function idleMessage(msg){els.idleMsg.textContent=msg;}
 async function startScan(){
+  if(cur().roster.length&&cur().finalized){cur().finalized=false;save();render();}
   try{actx=actx||new(window.AudioContext||window.webkitAudioContext)();if(actx.resume)actx.resume();}catch(e){}
   if(!window.isSecureContext){idleMessage('الكاميرا تعمل فقط على صفحات آمنة. افتح رابط https بدلاً من ملف محفوظ على الجهاز.');return;}
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){idleMessage('هذا المتصفح لا يمكنه فتح الكاميرا. جرّب متصفح Chrome.');return;}
@@ -10672,6 +10747,7 @@ function stopScan(){
   els.scanner.classList.remove('on');els.scanner.classList.add('off');
   els.btnScan.textContent='بدء المسح';
   idleMessage('الكاميرا متوقفة. اضغط «بدء المسح» ثم قرّب رمز الطالب داخل الزوايا.');
+  if(cur().roster.length)finalizeAttendance();
 }
 async function tick(ts){
   if(!scanning)return;
@@ -10693,6 +10769,9 @@ async function tick(ts){
 }
 els.btnScan.addEventListener('click',function(){if(scanning)stopScan();else startScan();});
 document.addEventListener('visibilitychange',function(){if(document.hidden&&scanning)stopScan();});
+
+els.btnRoster.addEventListener('click',function(){els.rosterInput.click();});
+els.rosterInput.addEventListener('change',async function(e){var f=e.target.files[0];e.target.value='';if(!f)return;try{var s=cur(),rows=await importRoster(f);s.roster=rows;s.records=[];s.finalized=false;if(s.title==='محاضرة')s.title=f.name.replace(/\.xlsx$/i,'');save();render();note('تم تحميل '+rows.length+' طالب من ملف Excel.',3600);}catch(x){note(x&&x.message?x.message:'تعذّر قراءة ملف Excel.',5200);}});
 
 els.btnPhoto.addEventListener('click',function(){els.photoInput.click();});
 els.photoInput.addEventListener('change',async function(e){
@@ -10736,6 +10815,7 @@ els.entrySave.addEventListener('click',function(){
     }
     save();render();els.entryDlg.close();return;
   }
+  if(s.roster.length){note('أضف الطلاب إلى ملف Excel ثم أعد تحميل القائمة.',3600);return;}
   var p={no:null,name:name,details:det};
   var dup=s.records.filter(function(x){return keyOf(x)===keyOf(p);})[0];
   if(dup){els.entryDlg.close();note(p.name+' مسجَّل مسبقاً الساعة '+fmtTime(dup.ts)+'.',3400);return;}
@@ -10795,11 +10875,12 @@ els.segShare.addEventListener('click',function(){setMode('share');});
 els.segSave.addEventListener('click',function(){setMode('save');});
 
 function getRows(){
-  var rs=cur().records.slice().sort(function(a,b){return a.ts-b.ts;});
+  var s=cur(),base=s.roster.length&&s.finalized?s.roster.map(function(r){var p=s.records.filter(function(x){return x.rosterId===r.id;})[0];return{name:r.name,details:r.details.map(function(d){return d.value;}).join('، '),date:p?fmtDate(p.ts):'',time:p?fmtTime(p.ts):'',status:p?'حاضر':'غائب'};}):s.records.slice().sort(function(a,b){return a.ts-b.ts;});
+  var rs=base;
   if(els.sortAz.checked)rs.sort(function(a,b){return a.name.localeCompare(b.name,'ar');});
-  return rs.map(function(r){return{name:r.name,details:r.details.map(function(d){return d.value;}).join('، '),date:fmtDate(r.ts),time:fmtTime(r.ts)};});
+  return rs.map(function(r){return r.status? r : {name:r.name,details:r.details.map(function(d){return d.value;}).join('، '),date:fmtDate(r.ts),time:fmtTime(r.ts),status:'حاضر'};});
 }
-function meta(){var s=cur(),n=Date.now();return{title:(s.title||'').trim()||'سجل الحضور',dateLabel:fmtLong(s.createdAt),exported:fmtDate(n)+'، '+fmtTime(n)};}
+function meta(){var s=cur(),n=Date.now();return{title:(s.title||'').trim()||'سجل الحضور',dateLabel:fmtLong(s.createdAt),presentCount:s.records.length,exported:fmtDate(n)+'، '+fmtTime(n)};}
 function fileBase(){
   var s=cur(),slug=(s.title||'').trim().replace(/[^\p{L}\p{N}]+/gu,'-').replace(/^-+|-+$/g,'')||'الحضور';
   return slug+'-'+isoDate(s.createdAt);
@@ -10819,7 +10900,7 @@ async function deliver(blob,filename){
 async function withBusy(btn,label,fn){
   var old=btn.textContent;btn.disabled=true;btn.textContent=label;
   try{await fn();}catch(e){note('تعذّر إنشاء الملف. '+(e&&e.message?e.message:''),5000);}
-  btn.textContent=old;btn.disabled=!cur().records.length;
+  btn.textContent=old;btn.disabled=!(cur().records.length||cur().roster.length&&cur().finalized);
 }
 els.btnWord.addEventListener('click',function(){
   withBusy(els.btnWord,'جارٍ التحضير…',async function(){await deliver(buildDocxBlob(meta(),getRows()),fileBase()+'.docx');});
@@ -10836,7 +10917,7 @@ function fit(g,text,x,y,maxW){
    right, name read first). */
 async function renderPdfPages(m,rows){
   var W=1240,H=1754,M=100,rowH=58,headH=64,bottom=H-120,firstY=M+215,right=W-M;
-  var cols=[['ت',70],['الاسم',320],['التفاصيل',330],['التاريخ',190],['الوقت',130]];
+  var cols=[['ت',70],['الاسم',260],['التفاصيل',260],['التاريخ',160],['الوقت',110],['الحالة',180]];
   var jobs=[],idx=0;
   for(;;){
     var startY=jobs.length?M:firstY,cap=Math.max(1,Math.floor((bottom-startY-headH)/rowH));
@@ -10851,7 +10932,7 @@ async function renderPdfPages(m,rows){
     if(job.first){
       g.fillStyle='#1C2B4F';g.font='700 50px '+FONT;fit(g,m.title,right,M+50,W-2*M);
       g.fillStyle='#4A556B';g.font='400 30px '+FONT;
-      fit(g,'التاريخ: '+m.dateLabel,right,M+110,W-2*M);fit(g,'عدد الطلبة الحاضرين: '+rows.length,right,M+152,W-2*M);
+      fit(g,'التاريخ: '+m.dateLabel,right,M+110,W-2*M);fit(g,'عدد الطلبة الحاضرين: '+m.presentCount,right,M+152,W-2*M);
       y=firstY;
     }
     g.fillStyle='#1C2B4F';g.fillRect(M,y,W-2*M,headH);
@@ -10862,7 +10943,7 @@ async function renderPdfPages(m,rows){
       var r=rows[i];
       if(i%2){g.fillStyle='#F3F5F9';g.fillRect(M,y,W-2*M,rowH);}
       g.fillStyle='#1B2233';g.font='400 27px '+FONT;
-      var v=[String(i+1),r.name,r.details,r.date,r.time];x=right;
+      var v=[String(i+1),r.name,r.details,r.date,r.time,r.status||'حاضر'];x=right;
       v.forEach(function(t,j){fit(g,t,x-14,y+rowH/2+9,cols[j][1]-24);x-=cols[j][1];});
       g.strokeStyle='#D5DBE6';g.lineWidth=1;g.beginPath();g.moveTo(M,y+rowH);g.lineTo(W-M,y+rowH);g.stroke();
       y+=rowH;
