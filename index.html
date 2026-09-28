@@ -92,8 +92,7 @@ header{display:flex;align-items:flex-start;gap:10px;margin-bottom:12px}
 .actions{display:flex;gap:10px;margin:12px 0;flex-wrap:wrap}
 .actions .primary{flex:1;min-width:150px}
 .roster-info{color:var(--muted);font-size:14px;margin:-4px 0 10px;line-height:1.35}
-.row.absent{opacity:.72}
-.row .state{font-size:13px;font-weight:800;color:var(--danger);padding-top:2px}
+.row .state{font-size:13px;font-weight:800;color:var(--accent);padding-top:2px}
 .row.absent .state{color:var(--danger)}
 
 /* class selector */
@@ -10660,7 +10659,7 @@ function span(cls,text){var e=document.createElement('span');if(cls)e.className=
 
 /* ---------- render ---------- */
 function render(){
-  var s=cur(),finalRows=s.roster.length&&s.finalized?s.roster.map(function(r){var p=s.records.filter(function(x){return x.rosterId===r.id;})[0];return Object.assign({},r,{status:p?'حاضر':'غائب',ts:p?p.ts:null});}):s.records.slice().reverse();
+  var s=cur(),finalRows=s.roster.length?s.roster.map(function(r){var p=s.records.filter(function(x){return x.rosterId===r.id;})[0];return Object.assign({},r,{status:p?'حاضر':'غائب',ts:p?p.ts:null});}):s.records.slice().reverse();
   if(document.activeElement!==els.title)els.title.value=s.title;
   els.dateLabel.textContent=fmtLong(s.createdAt);
   var present=s.records.length,total=s.roster.length&&s.finalized?s.roster.length:present;
@@ -10919,7 +10918,7 @@ els.segShare.addEventListener('click',function(){setMode('share');});
 els.segSave.addEventListener('click',function(){setMode('save');});
 
 function getRows(){
-  var s=cur(),base=s.roster.length&&s.finalized?s.roster.map(function(r){var p=s.records.filter(function(x){return x.rosterId===r.id;})[0];return{name:r.name,details:r.details.map(function(d){return d.value;}).join('، '),date:p?fmtDate(p.ts):'',time:p?fmtTime(p.ts):'',status:p?'حاضر':'غائب'};}):s.records.slice().sort(function(a,b){return a.ts-b.ts;});
+  var s=cur(),base=s.roster.length?s.roster.map(function(r){var p=s.records.filter(function(x){return x.rosterId===r.id;})[0];return{name:r.name,details:r.details.map(function(d){return d.value;}).join('، '),date:p?fmtDate(p.ts):'',time:p?fmtTime(p.ts):'',status:p?'حاضر':'غائب'};}):s.records.slice().sort(function(a,b){return a.ts-b.ts;});
   var rs=base;
   if(els.sortAz.checked)rs.sort(function(a,b){return a.name.localeCompare(b.name,'ar');});
   return rs.map(function(r){return r.status? r : {name:r.name,details:r.details.map(function(d){return d.value;}).join('، '),date:fmtDate(r.ts),time:fmtTime(r.ts),status:'حاضر'};});
