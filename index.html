@@ -207,13 +207,11 @@ dialog::backdrop{background:rgba(6,10,24,.55)}
   <section id="scanner" class="scanner off" aria-label="Camera view">
     <video id="video" playsinline muted></video>
     <div class="frame" aria-hidden="true"><i></i><i></i><i></i><i></i><span class="line"></span></div>
-    <div id="idle" class="idle"><span id="idleMsg">الكاميرا متوقفة. اضغط «بدء المسح» ثم قرّب رمز الطالب داخل الزوايا.</span></div>
+    <div id="idle" class="idle"><span id="idleMsg">اختر المجموعة لفتح الكاميرا وبدء تسجيل الحضور.</span></div>
   </section>
 
   <div class="actions">
     <button id="btnScan" class="primary" type="button">بدء المسح</button>
-    <button id="btnPhoto" class="ghost" type="button">مسح من صورة</button>
-    <input id="photoInput" type="file" accept="image/*" hidden>
   </div>
   <div id="rosterInfo" class="roster-info" hidden></div>
 
@@ -10648,7 +10646,7 @@ function finalizeAttendance(){
 }
 
 /* ---------- elements ---------- */
-var els={};['title','dateLabel','classButtons','scanner','video','idle','idleMsg','btnScan','btnPhoto','photoInput','rosterInfo','result','rStatus','rName','rDetail',
+  var els={};['title','dateLabel','classButtons','scanner','video','idle','idleMsg','btnScan','rosterInfo','result','rStatus','rName','rDetail',
  'count','countLabel','btnAdd','list','empty','note','sortAz','segShare','segSave','btnWord','btnPdf','entryDlg','entryTitle','fName','fDept','fGroup',
  'entryDel','entryCancel','entrySave','sessDlg','sessList','sessClose','sessNew','btnSessions','btnInstall'].forEach(function(id){els[id]=document.getElementById(id);});
 
@@ -10728,6 +10726,7 @@ var CLASS_LISTS={
 function classFileUrl(file){return new URL('./attendance%20lists/'+encodeURIComponent(file),location.href).href;}
 async function loadClass(key){
   var c=CLASS_LISTS[key];if(!c)return;
+  if(scanning)stopScan();
   els.classButtons.querySelectorAll('.class-button').forEach(function(b){b.disabled=true;});
   note('جارٍ تحميل قائمة '+c.label+'…',6000);
   try{
@@ -10738,6 +10737,7 @@ async function loadClass(key){
     s.title=c.label;s.classKey=key;s.classLabel=c.label;s.roster=rows;
     state.sessions.push(s);state.currentId=s.id;save();render();els.result.hidden=true;lastRaw='';
     note('تم تحميل قائمة '+c.label+' — '+rows.length+' طالب.',3600);
+    await startScan();
   }catch(e){note(e&&e.message?e.message:'تعذّر تحميل قائمة هذه المجموعة.',5200);}
   els.classButtons.querySelectorAll('.class-button').forEach(function(b){b.disabled=false;});
 }
@@ -10816,18 +10816,6 @@ async function tick(ts){
 }
 els.btnScan.addEventListener('click',function(){if(scanning)stopScan();else startScan();});
 document.addEventListener('visibilitychange',function(){if(document.hidden&&scanning)stopScan();});
-
-els.btnPhoto.addEventListener('click',function(){els.photoInput.click();});
-els.photoInput.addEventListener('change',async function(e){
-  var f=e.target.files[0];e.target.value='';if(!f)return;
-  try{
-    var bmp=await createImageBitmap(f),text=null;
-    if('BarcodeDetector' in window){try{var d=new BarcodeDetector({formats:['qr_code']});var cs=await d.detect(bmp);if(cs.length)text=cs[0].rawValue;}catch(x){}}
-    var sides=[1600,900,600,400,250];
-    for(var k=0;k<sides.length&&!text;k++)text=jsqrScan(bmp,bmp.width,bmp.height,sides[k],'attemptBoth');
-    if(text)handleScan(text,true);else note('لم يُعثر على رمز QR في هذه الصورة.',3200);
-  }catch(x){note('تعذّرت قراءة هذه الصورة.',3200);}
-});
 
 /* ---------- entry dialog (manual add / edit / remove) ---------- */
 var editingId=null;
