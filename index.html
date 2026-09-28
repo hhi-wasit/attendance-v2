@@ -10932,10 +10932,9 @@ async function deliver(blob,filename){
   if(mode==='share'){
     try{
       if(navigator.share){
-        var types=[blob.type,'application/octet-stream'];
+        var types=/\.docx$/i.test(filename)?[blob.type,'application/octet-stream']:[blob.type,'application/octet-stream'];
         for(var i=0;i<types.length;i++){
           var file=new File([blob],filename,{type:types[i]});
-          if(navigator.canShare&&!navigator.canShare({files:[file]}))continue;
           try{await navigator.share({files:[file],title:filename,text:'سجل الحضور'});return;}
           catch(x){if(x&&x.name==='AbortError')return;}
         }
