@@ -10441,7 +10441,7 @@ function buildDocxBlob(meta,rows){
   rows.forEach(function(r,i){
     var v=[String(i+1),r.name,r.details,r.date,r.time,r.status||'حاضر'];
     tbl+='<w:tr><w:trPr><w:cantSplit/></w:trPr>';
-    v.forEach(function(t,j){tbl+=wCell(t,DOCX_COLS[j][1],{fill:(i%2?'F3F5F9':null),color:(j===5&&t==='غائب'?'B3261E':null)});});
+    v.forEach(function(t,j){tbl+=wCell(t,DOCX_COLS[j][1],{fill:(i%2?'F3F5F9':null),color:(j===5?(t==='غائب'?'B3261E':t==='حاضر'?'188038':null):null)});});
     tbl+='</w:tr>';
   });
   tbl+='</w:tbl>';
@@ -10931,9 +10931,15 @@ function fileBase(){
 async function deliver(blob,filename){
   if(mode==='share'){
     try{
-      var file=new File([blob],filename,{type:blob.type});
-      var canFileShare=!navigator.canShare||navigator.canShare({files:[file]});
-      if(navigator.share&&canFileShare){await navigator.share({files:[file],title:filename,text:'سجل الحضور'});return;}
+      if(navigator.share){
+        var types=[blob.type,'application/octet-stream'];
+        for(var i=0;i<types.length;i++){
+          var file=new File([blob],filename,{type:types[i]});
+          if(navigator.canShare&&!navigator.canShare({files:[file]}))continue;
+          try{await navigator.share({files:[file],title:filename,text:'سجل الحضور'});return;}
+          catch(x){if(x&&x.name==='AbortError')return;}
+        }
+      }
     }catch(e){if(e&&e.name==='AbortError')return;}
   }
   var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;
@@ -10986,9 +10992,9 @@ async function renderPdfPages(m,rows){
     for(var i=job.from;i<job.to;i++){
       var r=rows[i];
       if(i%2){g.fillStyle='#F3F5F9';g.fillRect(M,y,W-2*M,rowH);}
-      g.fillStyle='#1B2233';g.font='400 27px '+FONT;
+      g.font='400 27px '+FONT;
       var v=[String(i+1),r.name,r.details,r.date,r.time,r.status||'حاضر'];x=right;
-      v.forEach(function(t,j){fit(g,t,x-14,y+rowH/2+9,cols[j][1]-24);x-=cols[j][1];});
+      v.forEach(function(t,j){g.fillStyle=j===5?(t==='غائب'?'#B3261E':t==='حاضر'?'#188038':'#1B2233'):'#1B2233';fit(g,t,x-14,y+rowH/2+9,cols[j][1]-24);x-=cols[j][1];});
       g.strokeStyle='#D5DBE6';g.lineWidth=1;g.beginPath();g.moveTo(M,y+rowH);g.lineTo(W-M,y+rowH);g.stroke();
       y+=rowH;
     }
