@@ -204,13 +204,13 @@ dialog::backdrop{background:rgba(6,10,24,.55)}
     </div>
   </section>
 
-  <section id="scanner" class="scanner off" aria-label="Camera view">
+  <section id="scanner" class="scanner off" aria-label="Camera view" hidden>
     <video id="video" playsinline muted></video>
     <div class="frame" aria-hidden="true"><i></i><i></i><i></i><i></i><span class="line"></span></div>
     <div id="idle" class="idle"><span id="idleMsg">اختر المجموعة لفتح الكاميرا وبدء تسجيل الحضور.</span></div>
   </section>
 
-  <div class="actions">
+  <div id="scanActions" class="actions" hidden>
     <button id="btnScan" class="primary" type="button">بدء المسح</button>
   </div>
   <div id="rosterInfo" class="roster-info" hidden></div>
@@ -10646,7 +10646,7 @@ function finalizeAttendance(){
 }
 
 /* ---------- elements ---------- */
-  var els={};['title','dateLabel','classButtons','scanner','video','idle','idleMsg','btnScan','rosterInfo','result','rStatus','rName','rDetail',
+  var els={};['title','dateLabel','classButtons','scanner','video','idle','idleMsg','scanActions','btnScan','rosterInfo','result','rStatus','rName','rDetail',
  'count','countLabel','btnAdd','list','empty','note','sortAz','segShare','segSave','btnWord','btnPdf','entryDlg','entryTitle','fName','fDept','fGroup',
  'entryDel','entryCancel','entrySave','sessDlg','sessList','sessClose','sessNew','btnSessions','btnInstall'].forEach(function(id){els[id]=document.getElementById(id);});
 
@@ -10736,6 +10736,7 @@ async function loadClass(key){
     var rows=await importRoster(blob),s=newSession();
     s.title=c.label;s.classKey=key;s.classLabel=c.label;s.roster=rows;
     state.sessions.push(s);state.currentId=s.id;save();render();els.result.hidden=true;lastRaw='';
+    els.scanner.hidden=false;els.scanActions.hidden=false;
     note('تم تحميل قائمة '+c.label+' — '+rows.length+' طالب.',3600);
     await startScan();
   }catch(e){note(e&&e.message?e.message:'تعذّر تحميل قائمة هذه المجموعة.',5200);}
