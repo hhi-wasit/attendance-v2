@@ -10449,13 +10449,14 @@ function buildDocxBlob(meta,rows){
     tbl+='</w:tr>';
   });
   tbl+='</w:tbl>';
-  var body=wPara(wRun(meta.title,{b:true,sz:36,color:'1C2B4F'}),{after:60,jc:'right'})+
-    wPara(wRun('اسم المحاضر: '+(meta.lecturer||'________________')+'    المادة: '+(meta.subject||'________________'),{sz:22,color:'4A556B'}),{after:40,jc:'right'})+
-    wPara(wRun('التاريخ: '+meta.dateLabel,{sz:22,color:'4A556B'}),{after:40,jc:'right'})+
-    wPara(wRun('عدد الطلبة الحاضرين: '+meta.presentCount,{sz:22,color:'4A556B'}),{after:200,jc:'right'})+
+  var body=wPara(wRun(meta.title,{b:true,sz:36,color:'1C2B4F'}),{after:60,jc:'right',bidi:true})+
+    wPara(wRun('المادة: '+(meta.subject||'________________'),{sz:22,color:'4A556B'}),{after:12,jc:'right',bidi:true})+
+    wPara(wRun('اسم المحاضر: '+(meta.lecturer||'________________'),{sz:22,color:'4A556B'}),{after:40,jc:'right',bidi:true})+
+    wPara(wRun('التاريخ: '+meta.dateLabel,{sz:22,color:'4A556B'}),{after:40,jc:'right',bidi:true})+
+    wPara(wRun('عدد الطلبة الحاضرين: '+meta.presentCount,{sz:22,color:'4A556B'}),{after:200,jc:'right',bidi:true})+
     tbl+
-    wPara(wRun('تاريخ التصدير: '+meta.exported,{sz:18,color:'7A8499'}),{before:140,after:0,jc:'right'})+
-    wPara(wRun('التوقيع: ______________________________',{sz:20,color:'4A556B'}),{before:120,after:0,jc:'right'});
+    wPara(wRun('تاريخ التصدير: '+meta.exported,{sz:18,color:'7A8499'}),{before:140,after:0,jc:'right',bidi:true})+
+    wPara(wRun('التوقيع: ______________________________',{sz:20,color:'4A556B'}),{before:120,after:0,jc:'right',bidi:true});
   var doc='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
     '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'+body+
     '<w:sectPr><w:bidi/><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="708" w:footer="708" w:gutter="0"/></w:sectPr></w:body></w:document>';
@@ -10966,7 +10967,7 @@ function fit(g,text,x,y,maxW){
    step leftward, mirroring the paper attendance sheet (name column on the
    right, name read first). */
 async function renderPdfPages(m,rows){
-  var W=1240,H=1754,M=100,rowH=58,headH=64,bottom=H-120,firstY=M+215,right=W-M;
+  var W=1240,H=1754,M=100,rowH=58,headH=64,bottom=H-120,firstY=M+270,right=W-M;
   var cols=[['ت',70],['الاسم',260],['التفاصيل',260],['التاريخ',160],['الوقت',110],['الحالة',180]];
   var jobs=[],idx=0;
   for(;;){
@@ -10982,8 +10983,10 @@ async function renderPdfPages(m,rows){
     if(job.first){
       g.fillStyle='#1C2B4F';g.font='700 50px '+FONT;fit(g,m.title,right,M+50,W-2*M);
       g.fillStyle='#4A556B';g.font='400 30px '+FONT;
+      g.direction='rtl';
       fit(g,'التاريخ: '+m.dateLabel,right,M+110,W-2*M);fit(g,'عدد الطلبة الحاضرين: '+m.presentCount,right,M+152,W-2*M);
-      fit(g,'اسم المحاضر: '+(m.lecturer||'________________')+'    المادة: '+(m.subject||'________________'),right,M+190,W-2*M);
+      fit(g,'المادة: '+(m.subject||'________________'),right,M+190,W-2*M);
+      fit(g,'اسم المحاضر: '+(m.lecturer||'________________'),right,M+222,W-2*M);
       y=firstY;
     }
     g.fillStyle='#1C2B4F';g.fillRect(M,y,W-2*M,headH);
