@@ -46,6 +46,8 @@ header{display:flex;align-items:flex-start;gap:10px;margin-bottom:12px}
 .title:hover{border-bottom-color:var(--line)}
 .title:focus{border-bottom-color:var(--accent);outline:none}
 .dateline{color:var(--muted);font-size:14px;margin-top:2px}
+.session-fields{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 0 10px}
+.session-fields input{width:100%;min-width:0;padding:8px 10px;border:1.5px solid var(--line);border-radius:9px;background:var(--panel);font-size:14px}
 
 .ghost{
   background:transparent;border:1.5px solid var(--line);border-radius:10px;
@@ -191,6 +193,10 @@ dialog::backdrop{background:rgba(6,10,24,.55)}
     </div>
     <button id="btnSessions" class="ghost" type="button">الجلسات</button>
   </header>
+  <div class="session-fields" aria-label="بيانات المحاضرة">
+    <input id="lecturer" type="text" maxlength="80" placeholder="اسم المحاضر" aria-label="اسم المحاضر" dir="auto">
+    <input id="subject" type="text" maxlength="100" placeholder="المادة" aria-label="المادة" dir="auto">
+  </div>
 
   <section class="classes" aria-labelledby="classHeading">
     <h2 id="classHeading">اختر المجموعة</h2>
@@ -10444,10 +10450,12 @@ function buildDocxBlob(meta,rows){
   });
   tbl+='</w:tbl>';
   var body=wPara(wRun(meta.title,{b:true,sz:36,color:'1C2B4F'}),{after:60,jc:'right'})+
+    wPara(wRun('اسم المحاضر: '+(meta.lecturer||'________________')+'    المادة: '+(meta.subject||'________________'),{sz:22,color:'4A556B'}),{after:40,jc:'right'})+
     wPara(wRun('التاريخ: '+meta.dateLabel,{sz:22,color:'4A556B'}),{after:40,jc:'right'})+
     wPara(wRun('عدد الطلبة الحاضرين: '+meta.presentCount,{sz:22,color:'4A556B'}),{after:200,jc:'right'})+
     tbl+
-    wPara(wRun('تاريخ التصدير: '+meta.exported,{sz:18,color:'7A8499'}),{before:200,after:0,jc:'right'});
+    wPara(wRun('تاريخ التصدير: '+meta.exported,{sz:18,color:'7A8499'}),{before:140,after:0,jc:'right'})+
+    wPara(wRun('التوقيع: ______________________________',{sz:20,color:'4A556B'}),{before:120,after:0,jc:'right'});
   var doc='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
     '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'+body+
     '<w:sectPr><w:bidi/><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="708" w:footer="708" w:gutter="0"/></w:sectPr></w:body></w:document>';
@@ -10503,12 +10511,12 @@ var fmtTime=function(ts){var d=new Date(ts);return pad(d.getHours())+':'+pad(d.g
 var isoDate=function(ts){var d=new Date(ts);return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());};
 
 /* ---------- storage ---------- */
-function newSession(){var now=Date.now();return{id:uid(),title:'محاضرة',createdAt:now,records:[],roster:[],finalized:false,classKey:null,classLabel:''};}
+function newSession(){var now=Date.now();return{id:uid(),title:'محاضرة',lecturer:'',subject:'',createdAt:now,records:[],roster:[],finalized:false,classKey:null,classLabel:''};}
 var state=(function(){
   try{var s=JSON.parse(localStorage.getItem(STORE));if(s&&Array.isArray(s.sessions)&&s.sessions.length)return s;}catch(e){}
   var first=newSession();return{sessions:[first],currentId:first.id};
 })();
-state.sessions.forEach(function(s){if(!Array.isArray(s.roster))s.roster=[];if(typeof s.finalized!=='boolean')s.finalized=false;if(!s.classKey)s.classKey=null;if(!s.classLabel)s.classLabel='';});
+state.sessions.forEach(function(s){if(typeof s.lecturer!=='string')s.lecturer='';if(typeof s.subject!=='string')s.subject='';if(!Array.isArray(s.roster))s.roster=[];if(typeof s.finalized!=='boolean')s.finalized=false;if(!s.classKey)s.classKey=null;if(!s.classLabel)s.classLabel='';});
 var storageWarned=false;
 function save(){
   try{localStorage.setItem(STORE,JSON.stringify(state));}
@@ -10646,7 +10654,7 @@ function finalizeAttendance(){
 }
 
 /* ---------- elements ---------- */
-  var els={};['title','dateLabel','classButtons','scanner','video','idle','idleMsg','scanActions','btnScan','rosterInfo','result','rStatus','rName','rDetail',
+  var els={};['title','dateLabel','lecturer','subject','classButtons','scanner','video','idle','idleMsg','scanActions','btnScan','rosterInfo','result','rStatus','rName','rDetail',
  'count','countLabel','btnAdd','list','empty','note','sortAz','segShare','segSave','btnWord','btnPdf','entryDlg','entryTitle','fName','fDept','fGroup',
  'entryDel','entryCancel','entrySave','sessDlg','sessList','sessClose','sessNew','btnSessions','btnInstall'].forEach(function(id){els[id]=document.getElementById(id);});
 
@@ -10659,6 +10667,8 @@ function span(cls,text){var e=document.createElement('span');if(cls)e.className=
 function render(){
   var s=cur(),finalRows=s.roster.length?s.roster.map(function(r){var p=s.records.filter(function(x){return x.rosterId===r.id;})[0];return Object.assign({},r,{status:p?'حاضر':'غائب',ts:p?p.ts:null});}):s.records.slice().reverse();
   if(document.activeElement!==els.title)els.title.value=s.title;
+  if(document.activeElement!==els.lecturer)els.lecturer.value=s.lecturer||'';
+  if(document.activeElement!==els.subject)els.subject.value=s.subject||'';
   els.dateLabel.textContent=fmtLong(s.createdAt);
   var present=s.records.length,total=s.roster.length&&s.finalized?s.roster.length:present;
   els.count.textContent=present;
@@ -10867,6 +10877,8 @@ els.entryDel.addEventListener('click',function(){
 els.title.addEventListener('input',function(){cur().title=els.title.value.slice(0,80);save();});
 els.title.addEventListener('keydown',function(e){if(e.key==='Enter')els.title.blur();});
 els.title.addEventListener('blur',function(){if(!els.title.value.trim()){cur().title='محاضرة';save();}render();});
+els.lecturer.addEventListener('input',function(){cur().lecturer=els.lecturer.value.slice(0,80);save();});
+els.subject.addEventListener('input',function(){cur().subject=els.subject.value.slice(0,100);save();});
 
 function renderSessions(){
   els.sessList.replaceChildren();
@@ -10912,7 +10924,7 @@ function getRows(){
   if(els.sortAz.checked)rs.sort(function(a,b){return a.name.localeCompare(b.name,'ar');});
   return rs.map(function(r){return r.status? r : {name:r.name,details:r.details.map(function(d){return d.value;}).join('، '),date:fmtDate(r.ts),time:fmtTime(r.ts),status:'حاضر'};});
 }
-function meta(){var s=cur(),n=Date.now();return{title:(s.title||'').trim()||'سجل الحضور',dateLabel:fmtLong(s.createdAt),presentCount:s.records.length,exported:fmtDate(n)+'، '+fmtTime(n)};}
+function meta(){var s=cur(),n=Date.now();return{title:(s.title||'').trim()||'سجل الحضور',lecturer:(s.lecturer||'').trim(),subject:(s.subject||'').trim(),dateLabel:fmtLong(s.createdAt),presentCount:s.records.length,exported:fmtDate(n)+'، '+fmtTime(n)};}
 function fileBase(){
   var s=cur(),slug=(s.title||'').trim().replace(/[^\p{L}\p{N}]+/gu,'-').replace(/^-+|-+$/g,'')||'الحضور';
   return slug+'-'+isoDate(s.createdAt);
@@ -10971,6 +10983,7 @@ async function renderPdfPages(m,rows){
       g.fillStyle='#1C2B4F';g.font='700 50px '+FONT;fit(g,m.title,right,M+50,W-2*M);
       g.fillStyle='#4A556B';g.font='400 30px '+FONT;
       fit(g,'التاريخ: '+m.dateLabel,right,M+110,W-2*M);fit(g,'عدد الطلبة الحاضرين: '+m.presentCount,right,M+152,W-2*M);
+      fit(g,'اسم المحاضر: '+(m.lecturer||'________________')+'    المادة: '+(m.subject||'________________'),right,M+190,W-2*M);
       y=firstY;
     }
     g.fillStyle='#1C2B4F';g.fillRect(M,y,W-2*M,headH);
@@ -10986,8 +10999,9 @@ async function renderPdfPages(m,rows){
       g.strokeStyle='#D5DBE6';g.lineWidth=1;g.beginPath();g.moveTo(M,y+rowH);g.lineTo(W-M,y+rowH);g.stroke();
       y+=rowH;
     }
-    g.fillStyle='#7A8499';g.font='400 24px '+FONT;g.textAlign='right';fit(g,'صفحة '+(p+1)+' من '+jobs.length,right,H-60,W-2*M);
-    g.textAlign='left';g.fillText('التصدير '+m.exported,M,H-60);g.textAlign='right';
+    g.fillStyle='#7A8499';g.font='400 24px '+FONT;g.textAlign='right';fit(g,'صفحة '+(p+1)+' من '+jobs.length,right,H-38,W-2*M);
+    if(p===jobs.length-1){g.fillStyle='#4A556B';g.font='400 26px '+FONT;fit(g,'التوقيع: ______________________________',right,H-78,W-2*M);}
+    g.textAlign='left';g.fillText('التصدير '+m.exported,M,H-38);g.textAlign='right';
     var blob=await new Promise(function(res){c.toBlob(res,'image/jpeg',0.9);});
     out.push(new Uint8Array(await blob.arrayBuffer()));
   }
