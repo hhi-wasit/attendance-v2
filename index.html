@@ -10449,13 +10449,16 @@ function buildDocxBlob(meta,rows){
     tbl+='</w:tr>';
   });
   tbl+='</w:tbl>';
-  var body=wPara(wRun(meta.title,{b:true,sz:36,color:'1C2B4F'}),{after:60,jc:'right',bidi:true})+
-    wPara(wRun('المادة: '+(meta.subject||'________________'),{sz:22,color:'4A556B'}),{after:12,jc:'right',bidi:true})+
-    wPara(wRun('اسم المحاضر: '+(meta.lecturer||'________________'),{sz:22,color:'4A556B'}),{after:40,jc:'right',bidi:true})+
-    wPara(wRun('التاريخ: '+meta.dateLabel,{sz:22,color:'4A556B'}),{after:40,jc:'right',bidi:true})+
-    wPara(wRun('عدد الطلبة الحاضرين: '+meta.presentCount,{sz:22,color:'4A556B'}),{after:200,jc:'right',bidi:true})+
+  var header='<w:tbl><w:tblPr><w:tblW w:w="9638" w:type="dxa"/><w:bidiVisual/><w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid><w:gridCol w:w="5338"/><w:gridCol w:w="4300"/></w:tblGrid><w:tr>'+
+    '<w:tc><w:tcPr><w:tcW w:w="5338" w:type="dxa"/></w:tcPr>'+wPara(wRun(meta.title,{b:true,sz:36,color:'1C2B4F'}),{after:20,jc:'right',bidi:true})+
+    wPara(wRun('المادة: '+(meta.subject||'________________'),{sz:22,color:'4A556B'}),{after:8,jc:'right',bidi:true})+
+    wPara(wRun('اسم المحاضر: '+(meta.lecturer||'________________'),{sz:22,color:'4A556B'}),{after:0,jc:'right',bidi:true})+'</w:tc>'+
+    '<w:tc><w:tcPr><w:tcW w:w="4300" w:type="dxa"/></w:tcPr>'+wPara(wRun('التاريخ: '+meta.dateLabel,{sz:22,color:'4A556B'}),{after:8,jc:'left'})+
+    wPara(wRun('عدد الطلبة الحاضرين: '+meta.presentCount,{sz:22,color:'4A556B'}),{after:0,jc:'left'})+'</w:tc></w:tr></w:tbl>';
+  var body=header+
+    wPara(wRun('',{sz:8}),{after:70})+
     tbl+
-    wPara(wRun('تاريخ التصدير: '+meta.exported,{sz:18,color:'7A8499'}),{before:140,after:0,jc:'right',bidi:true})+
+    wPara(wRun('تاريخ التصدير: '+meta.exported,{sz:18,color:'7A8499'}),{before:140,after:0,jc:'left'})+
     wPara(wRun('التوقيع: ______________________________',{sz:20,color:'4A556B'}),{before:120,after:0,jc:'right',bidi:true});
   var doc='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
     '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'+body+
@@ -10967,7 +10970,7 @@ function fit(g,text,x,y,maxW){
    step leftward, mirroring the paper attendance sheet (name column on the
    right, name read first). */
 async function renderPdfPages(m,rows){
-  var W=1240,H=1754,M=100,rowH=58,headH=64,bottom=H-120,firstY=M+270,right=W-M;
+  var W=1240,H=1754,M=100,rowH=58,headH=64,bottom=H-120,firstY=M+135,right=W-M;
   var cols=[['ت',70],['الاسم',260],['التفاصيل',260],['التاريخ',160],['الوقت',110],['الحالة',180]];
   var jobs=[],idx=0;
   for(;;){
@@ -10981,12 +10984,13 @@ async function renderPdfPages(m,rows){
     var g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,W,H);g.textBaseline='alphabetic';g.textAlign='right';
     var y=M;
     if(job.first){
-      g.fillStyle='#1C2B4F';g.font='700 50px '+FONT;fit(g,m.title,right,M+50,W-2*M);
-      g.fillStyle='#4A556B';g.font='400 30px '+FONT;
-      g.direction='rtl';
-      fit(g,'التاريخ: '+m.dateLabel,right,M+110,W-2*M);fit(g,'عدد الطلبة الحاضرين: '+m.presentCount,right,M+152,W-2*M);
-      fit(g,'المادة: '+(m.subject||'________________'),right,M+190,W-2*M);
-      fit(g,'اسم المحاضر: '+(m.lecturer||'________________'),right,M+222,W-2*M);
+      g.direction='rtl';g.fillStyle='#1C2B4F';g.font='700 50px '+FONT;fit(g,m.title,right,M+45,W-2*M);
+      g.fillStyle='#4A556B';g.font='400 28px '+FONT;
+      fit(g,'المادة: '+(m.subject||'________________'),right,M+80,W-2*M);
+      fit(g,'اسم المحاضر: '+(m.lecturer||'________________'),right,M+110,W-2*M);
+      g.direction='ltr';g.textAlign='left';
+      fit(g,'التاريخ: '+m.dateLabel,M,M+45,W-2*M);fit(g,'عدد الطلبة الحاضرين: '+m.presentCount,M,M+78,W-2*M);
+      g.textAlign='right';g.direction='rtl';
       y=firstY;
     }
     g.fillStyle='#1C2B4F';g.fillRect(M,y,W-2*M,headH);
