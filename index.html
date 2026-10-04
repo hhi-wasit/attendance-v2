@@ -10635,9 +10635,49 @@ function keyOf(r){
   return(r.name+'|'+r.details.map(function(d){return d.value;}).join('|')).toLowerCase();
 }
 
+function detailValueOf(details,label){
+  var x=(details||[]).filter(function(d){return d.label===label;})[0];
+  return x?clean(x.value):'';
+}
+function classValueMatches(key,value){
+  var v=norm(value),aliases={
+    emergency:['الطوارئ','emergency','emergency department'],
+    midwifery:['القبالة','midwifery','midwifery department'],
+    'nursing-a':['التمريض كروب a','التمريض a','nursing a','nursing group a','a'],
+    'nursing-b':['التمريض كروب b','التمريض b','nursing b','nursing group b','b'],
+    'nursing-c':['التمريض كروب c','التمريض c','nursing c','nursing group c','c'],
+    'nursing-d':['التمريض كروب d','التمريض d','nursing d','nursing group d','d']
+  }[key]||[];
+  if(/^nursing-/.test(key)&&v===norm('التمريض'))return true;
+  return aliases.some(function(a){return v===norm(a);})||aliases.some(function(a){return v.indexOf(norm(a))>=0||norm(a).indexOf(v)>=0;});
+}
+function selectedClassMatches(p){
+  var s=cur(),key=s.classKey,dept=detailValueOf(p.details,LABEL_AR.dept),group=detailValueOf(p.details,LABEL_AR.group);
+  if(!key)return true;
+  if(dept&&!classValueMatches(key,dept))return false;
+  if(group&&/^nursing-/.test(key)&&!classValueMatches(key,group))return false;
+  return true;
+}
+function rosterDetailsMatch(p,r){
+  var labels=[LABEL_AR.dept,LABEL_AR.group,LABEL_AR.stage];
+  return labels.every(function(label){
+    var pv=detailValueOf(p.details,label),rv=detailValueOf(r.details,label);
+    return !pv||!rv||norm(pv)===norm(rv);
+  });
+}
 function findRoster(p,raw){
-  var s=cur(),rn=norm(raw),pn=norm(p.no),nn=norm(p.name);
-  return s.roster.filter(function(r){return(pn&&norm(r.no)===pn)||(nn&&norm(r.name)===nn)||(rn&&norm(r.no)===rn)||(rn&&norm(r.name)===rn);})[0]||null;
+  var s=cur(),pn=norm(p.no),nn=norm(p.name);
+  /* Department rosters reuse serial numbers (1, 2, 3, ...). A QR code that
+     contains only that serial cannot identify its department, so never mark
+     it present by number alone. */
+  if(!selectedClassMatches(p)||(!pn&&!nn)||(pn&&!nn&&!(p.details||[]).length))return null;
+  return s.roster.filter(function(r){
+    var rn=norm(r.no),nm=norm(r.name);
+    /* If both identity fields are in the QR code, both must agree with the
+       same roster row. Never accept a number-only match over a conflicting name. */
+    var identity=pn&&nn?(rn===pn&&nm===nn):(pn?rn===pn:nm===nn);
+    return identity&&rosterDetailsMatch(p,r);
+  })[0]||null;
 }
 function record(raw){
   var p=parseCode(raw),s=cur(),match=s.roster.length?findRoster(p,raw):null;
