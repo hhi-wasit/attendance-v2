@@ -32,4 +32,4 @@ export JAVA_HOME=/path/to/jdk-17
 /path/to/gradle-8.10.2/bin/gradle :app:assembleDebug
 ```
 
-The debug APK is written to `android/app/build/outputs/apk/debug/app-debug.apk`. The signed release artifact in this repository is `dist/Attendance.apk` (version 1.0.2).
+The debug APK is written to `android/app/build/outputs/apk/debug/app-debug.apk`. The signed release artifact in this repository is `dist/Attendance.apk` (version 1.0.3).

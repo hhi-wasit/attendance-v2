@@ -10583,15 +10583,22 @@ async function importRoster(file){
 function clean(s){return String(s==null?'':s).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'').replace(/\s+/g,' ').trim().slice(0,120);}
 var LABEL_AR={dept:'القسم',group:'المجموعة',stage:'المرحلة'};
 var LABEL_KEYS={
-  no:['no','number','num','id','الرقم','رقم','ت'],
-  name:['name','الاسم','اسم'],
-  dept:['department','dept','القسم','التخصص','الفرع'],
-  group:['group','المجموعة','مجموعة','الشعبة','شعبة'],
+  no:['no','number','num','id','الرقم','رقم','الرقم الجامعي','الرقم الطلابي','university id','student id','ت'],
+  name:['name','الاسم','اسم','اسم الطالب','الاسم الكامل','student name','full name'],
+  dept:['department','dept','القسم','القسم الدراسي','التخصص','الفرع','department name'],
+  group:['group','المجموعة','المجموعة الدراسية','مجموعة','الشعبة','شعبة','group name'],
   stage:['stage','level','year','المرحلة','مرحلة']
 };
 function matchLabelKey(label){
-  var n=clean(label).toLowerCase();
-  for(var k in LABEL_KEYS){for(var i=0;i<LABEL_KEYS[k].length;i++){if(LABEL_KEYS[k][i].toLowerCase()===n)return k;}}
+  var n=norm(clean(label));
+  for(var k in LABEL_KEYS){for(var i=0;i<LABEL_KEYS[k].length;i++){
+    var a=norm(LABEL_KEYS[k][i]);
+    if(n===a)return k;
+  }}
+  for(var k2 in LABEL_KEYS){for(var j=0;j<LABEL_KEYS[k2].length;j++){
+    var a2=norm(LABEL_KEYS[k2][j]);
+    if(a2.length>=3&&(n.indexOf(a2)>=0||a2.indexOf(n)>=0))return k2;
+  }}
   return null;
 }
 function detailsFromMap(map){
@@ -10605,17 +10612,18 @@ function parseCode(raw){
   var t=String(raw).replace(/\r/g,'').trim();
   if(t.charAt(0)==='{'){
     try{
-      var o=JSON.parse(t),nm=clean(o.name||o.Name);
+      var o=JSON.parse(t),jm={};Object.keys(o).forEach(function(k){var mk=matchLabelKey(k);if(mk)jm[mk]=o[k];});
+      var nm=clean(jm.name);
       if(nm){
-        var map={dept:clean(o.department||o.dept||o.Department),group:clean(o.group||o.Group),stage:clean(o.stage||o.Stage)};
-        return{no:clean(o.no||o.number)||null,name:nm,details:detailsFromMap(map)};
+        var map={dept:clean(jm.dept),group:clean(jm.group),stage:clean(jm.stage)};
+        return{no:clean(jm.no)||null,name:nm,details:detailsFromMap(map)};
       }
     }catch(e){}
   }
-  var lines=t.split('\n').filter(function(l){return clean(l);});
+  var lines=t.replace(/^\uFEFF/,'').split('\n').filter(function(l){return clean(l);});
   var map={},extra=[],labeled=false;
   lines.forEach(function(line){
-    var m=line.match(/^([^:：]{1,30})[:：]\s*(.*)$/);
+    var m=line.match(/^([^:：=\t]{1,50})[:：=\t]\s*(.*)$/);
     if(!m)return;
     var key=matchLabelKey(m[1]),val=clean(m[2]);
     if(key){labeled=true;map[key]=val;}
